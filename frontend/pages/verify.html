@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Verify Certificate — BlockCert</title>
+  <link rel="stylesheet" href="../css/style.css"/>
+</head>
+<body>
+<div class="bg-mesh"></div>
+<nav>
+  <a href="../index.html" class="nav-logo"><div class="logo-icon">⛓</div> BlockCert</a>
+  <div class="nav-links">
+    <a href="../index.html">Home</a>
+    <a href="verify.html" class="active">Verify</a>
+    <a href="login.html" class="btn-nav">Admin</a>
+  </div>
+</nav>
+
+<div class="page-header" style="text-align:center;padding:64px 40px 40px;">
+  <h1 style="font-size:2.2rem;">🔍 Certificate Verification</h1>
+  <p style="color:var(--muted);font-size:1rem;margin-top:8px;">Enter a Certificate ID to instantly verify if it's real or fake.</p>
+</div>
+
+<div class="main" style="max-width:640px;">
+  <div class="card" style="padding:40px;">
+    <div class="form-group" style="margin-bottom:20px;">
+      <label class="form-label">Certificate ID</label>
+      <input id="certIdInput" type="text" class="form-control" placeholder="e.g. CERT-2024-0001" style="font-size:1rem;padding:14px;"/>
+    </div>
+    <button id="verifyBtn" class="btn btn-primary btn-lg" style="width:100%;" onclick="doVerify()">
+      🔍 Verify Certificate
+    </button>
+    <p style="text-align:center;color:var(--muted);font-size:.85rem;margin-top:16px;">
+      This is a public check — no login required.
+    </p>
+  </div>
+
+  <div id="resultArea" style="margin-top:24px;display:none;"></div>
+</div>
+
+<script src="../js/api.js"></script>
+<script src="../js/utils.js"></script>
+<script>
+// Pre-fill if ?id= in URL
+const preId = getQueryParam('id');
+if (preId) {
+  document.getElementById('certIdInput').value = preId;
+  window.addEventListener('DOMContentLoaded', () => setTimeout(doVerify, 300));
+}
+
+async function doVerify() {
+  const id  = document.getElementById('certIdInput').value.trim().toUpperCase();
+  const btn = document.getElementById('verifyBtn');
+  const res = document.getElementById('resultArea');
+
+  if (!id) { showToast('Please enter a Certificate ID.', 'error'); return; }
+
+  setLoading(btn, true, '🔍 Verify Certificate');
+  res.style.display = 'none';
+
+  try {
+    const { data } = await CertAPI.verify(id);
+    res.style.display = 'block';
+
+    // Navigate to result page
+    sessionStorage.setItem('verifyResult', JSON.stringify(data));
+    window.location.href = `result.html?id=${id}`;
+  } catch(e) {
+    res.style.display = 'block';
+    res.innerHTML = '<div class="alert alert-error">❌ Cannot connect to server. Make sure the backend is running on port 8080.</div>';
+  }
+  setLoading(btn, false, '🔍 Verify Certificate');
+}
+
+document.getElementById('certIdInput').addEventListener('keydown', e => { if(e.key==='Enter') doVerify(); });
+</script>
+</body>
+</html>

@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Issue Certificate — BlockCert Admin</title>
+  <link rel="stylesheet" href="../css/style.css"/>
+</head>
+<body>
+<div class="bg-mesh"></div>
+<nav>
+  <a href="../index.html" class="nav-logo"><div class="logo-icon">⛓</div> BlockCert</a>
+  <div class="nav-links">
+    <a href="dashboard.html">Dashboard</a>
+    <a href="add-certificate.html" class="active">Issue Cert</a>
+    <a href="all-certificates.html">All Certs</a>
+    <a href="verify.html">Verify</a>
+    <button class="btn btn-outline btn-sm" onclick="logout()">Logout</button>
+  </div>
+</nav>
+
+<div class="page-header"><h1>📜 Issue New Certificate</h1><p>Fill in the details to add a certificate to the blockchain.</p></div>
+
+<div class="main" style="max-width:800px;">
+  <div class="card" style="padding:40px;">
+    <div id="resultBox" style="display:none;margin-bottom:28px;"></div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;">
+      <div class="form-group">
+        <label class="form-label">Student Full Name *</label>
+        <input id="studentName" type="text" class="form-control" placeholder="e.g. Arjun Sharma"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Course / Programme Name *</label>
+        <input id="courseName" type="text" class="form-control" placeholder="e.g. Bachelor of Computer Science"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Issue Date *</label>
+        <input id="issueDate" type="date" class="form-control"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Grade / Result *</label>
+        <select id="grade" class="form-control">
+          <option value="">Select Grade</option>
+          <option>A+</option><option>A</option><option>B+</option><option>B</option>
+          <option>C</option><option>Distinction</option><option>First Class</option>
+          <option>Second Class</option><option>Pass</option>
+        </select>
+      </div>
+      <div class="form-group" style="grid-column:1/-1;">
+        <label class="form-label">Institute / University Name *</label>
+        <input id="instituteName" type="text" class="form-control" placeholder="e.g. Anna University, Chennai"/>
+      </div>
+    </div>
+
+    <div style="margin-top:32px;display:flex;gap:12px;">
+      <button id="issueBtn" class="btn btn-success btn-lg" onclick="issueCertificate()">⛓ Issue on Blockchain</button>
+      <button class="btn btn-outline" onclick="resetForm()">Clear</button>
+    </div>
+  </div>
+
+  <!-- Success card shown after issue -->
+  <div id="successCard" class="card" style="display:none;margin-top:24px;border-color:rgba(16,185,129,.3);background:rgba(16,185,129,.05);">
+    <h3 style="color:var(--green);margin-bottom:20px;">✅ Certificate Issued Successfully!</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px;" id="certDetails"></div>
+    <div style="margin-bottom:16px;">
+      <div style="font-size:.8rem;color:var(--muted);font-weight:700;text-transform:uppercase;margin-bottom:6px;">Certificate ID</div>
+      <div id="certIdDisplay" class="hash-text" style="cursor:pointer;font-size:1rem;" onclick="copyId()"></div>
+    </div>
+    <div id="qrSection" style="display:none;margin-bottom:16px;">
+      <div style="font-size:.8rem;color:var(--muted);font-weight:700;text-transform:uppercase;margin-bottom:8px;">QR Code (scan to verify)</div>
+      <img id="qrImg" src="" style="width:160px;height:160px;border-radius:12px;border:1px solid var(--border);"/>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <button class="btn btn-outline btn-sm" onclick="copyId()">📋 Copy ID</button>
+      <button class="btn btn-primary btn-sm" onclick="viewCert()">👁 View Certificate</button>
+      <button class="btn btn-outline btn-sm" onclick="downloadPDF()">📄 Download PDF</button>
+    </div>
+  </div>
+</div>
+
+<script src="../js/api.js"></script>
+<script src="../js/utils.js"></script>
+<script>
+if (!requireAuth()) throw new Error();
+let lastCert = null;
+
+// Set today's date as default
+document.getElementById('issueDate').value = new Date().toISOString().split('T')[0];
+
+async function issueCertificate() {
+  const fields = {
+    studentName:   document.getElementById('studentName').value.trim(),
+    courseName:    document.getElementById('courseName').value.trim(),
+    issueDate:     document.getElementById('issueDate').value,
+    grade:         document.getElementById('grade').value,
+    instituteName: document.getElementById('instituteName').value.trim(),
+  };
+
+  const missing = Object.entries(fields).filter(([k,v]) => !v).map(([k]) => k);
+  if (missing.length) {
+    showToast('Please fill all required fields.', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('issueBtn');
+  setLoading(btn, true, '⛓ Issue on Blockchain');
+  document.getElementById('resultBox').style.display = 'none';
+  document.getElementById('successCard').style.display = 'none';
+
+  try {
+    const { status, data } = await CertAPI.issue(fields);
+    if (data.success && data.data) {
+      lastCert = data.data;
+      showSuccessCard(lastCert);
+      showToast('Certificate issued and added to blockchain!', 'success');
+    } else {
+      const rb = document.getElementById('resultBox');
+      rb.className = 'alert alert-error';
+      rb.textContent = '❌ ' + (data.message || 'Failed to issue certificate.');
+      rb.style.display = 'flex';
+    }
+  } catch(e) {
+    const rb = document.getElementById('resultBox');
+    rb.className = 'alert alert-error';
+    rb.textContent = '❌ Cannot reach server. Make sure Spring Boot is running on port 8080.';
+    rb.style.display = 'flex';
+  }
+  setLoading(btn, false, '⛓ Issue on Blockchain');
+}
+
+function showSuccessCard(cert) {
+  document.getElementById('successCard').style.display = 'block';
+  document.getElementById('certIdDisplay').textContent = cert.certificateId;
+  document.getElementById('certDetails').innerHTML = `
+    <div><div style="font-size:.75rem;color:var(--muted);text-transform:uppercase;margin-bottom:4px;">Student</div><strong>${cert.studentName}</strong></div>
+    <div><div style="font-size:.75rem;color:var(--muted);text-transform:uppercase;margin-bottom:4px;">Course</div><strong>${cert.courseName}</strong></div>
+    <div><div style="font-size:.75rem;color:var(--muted);text-transform:uppercase;margin-bottom:4px;">Grade</div><span class="badge badge-info">${cert.grade}</span></div>
+    <div><div style="font-size:.75rem;color:var(--muted);text-transform:uppercase;margin-bottom:4px;">Issue Date</div><strong>${formatDate(cert.issueDate)}</strong></div>
+  `;
+  if (cert.qrCodeData) {
+    document.getElementById('qrSection').style.display = 'block';
+    document.getElementById('qrImg').src = 'data:image/png;base64,' + cert.qrCodeData;
+  }
+  document.getElementById('successCard').scrollIntoView({ behavior: 'smooth' });
+}
+
+function copyId()    { if(lastCert) copyToClipboard(lastCert.certificateId); }
+function viewCert()  { if(lastCert) window.open(`result.html?id=${lastCert.certificateId}`, '_blank'); }
+function downloadPDF(){ if(lastCert) downloadCertificatePDF(lastCert); }
+function resetForm() {
+  ['studentName','courseName','issueDate','instituteName'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('grade').value = '';
+  document.getElementById('issueDate').value = new Date().toISOString().split('T')[0];
+  document.getElementById('successCard').style.display = 'none';
+  lastCert = null;
+}
+</script>
+</body>
+</html>

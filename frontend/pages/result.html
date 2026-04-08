@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Verification Result — BlockCert</title>
+  <link rel="stylesheet" href="../css/style.css"/>
+  <style>
+    .result-banner { padding: 40px; text-align: center; border-radius: 20px; margin-bottom: 28px; }
+    .result-valid   { background: linear-gradient(135deg, rgba(16,185,129,.15), rgba(6,182,212,.1)); border: 2px solid rgba(16,185,129,.4); }
+    .result-invalid { background: linear-gradient(135deg, rgba(239,68,68,.15), rgba(245,158,11,.08)); border: 2px solid rgba(239,68,68,.4); }
+    .result-icon    { font-size: 5rem; display: block; margin-bottom: 16px; animation: pop .4s ease; }
+    @keyframes pop  { from { transform: scale(0.5); opacity:0; } to { transform: scale(1); opacity:1; } }
+    .detail-row     { display: flex; padding: 14px 0; border-bottom: 1px solid var(--border); gap: 16px; }
+    .detail-row:last-child { border-bottom: none; }
+    .detail-key     { min-width: 160px; color: var(--muted); font-size: .85rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+    .detail-val     { font-size: .95rem; font-weight: 500; flex: 1; }
+  </style>
+</head>
+<body>
+<div class="bg-mesh"></div>
+<nav>
+  <a href="../index.html" class="nav-logo"><div class="logo-icon">⛓</div> BlockCert</a>
+  <div class="nav-links">
+    <a href="../index.html">Home</a>
+    <a href="verify.html">Verify Another</a>
+    <a href="login.html" class="btn-nav">Admin</a>
+  </div>
+</nav>
+
+<div class="main" style="max-width:780px;padding-top:40px;">
+  <div id="content"><div style="display:flex;justify-content:center;padding:80px"><div class="spinner"></div></div></div>
+</div>
+
+<script src="../js/api.js"></script>
+<script src="../js/utils.js"></script>
+<script>
+const certId = getQueryParam('id');
+const cached = sessionStorage.getItem('verifyResult');
+
+async function load() {
+  let result;
+  try {
+    if (cached) {
+      result = JSON.parse(cached);
+      sessionStorage.removeItem('verifyResult');
+    } else if (certId) {
+      const { data } = await CertAPI.verify(certId);
+      result = data;
+    } else {
+      render(null); return;
+    }
+    render(result);
+  } catch(e) {
+    document.getElementById('content').innerHTML = '<div class="alert alert-error">Cannot connect to server.</div>';
+  }
+}
+
+function render(result) {
+  const el = document.getElementById('content');
+  if (!result) {
+    el.innerHTML = '<div class="alert alert-error">No certificate ID provided. <a href="verify.html" style="color:var(--blue)">Go back</a></div>';
+    return;
+  }
+
+  const ok   = result.data?.valid ?? result.success;
+  const cert = result.data?.certificate ?? (result.data?.valid != null ? null : null);
+  const vr   = result.data ?? {};
+  const c    = vr.certificate;
+
+  el.innerHTML = `
+    <div class="result-banner ${ok ? 'result-valid' : 'result-invalid'}">
+      <span class="result-icon">${ok ? '✅' : '❌'}</span>
+      <h2 style="font-size:2rem;font-weight:800;margin-bottom:8px;color:${ok ? 'var(--green)' : 'var(--red)'}">
+        ${ok ? 'Certificate is VALID' : 'Certificate is INVALID'}
+      </h2>
+      <p style="color:var(--muted);font-size:1rem;">${vr.message || result.message || ''}</p>
+      ${vr.blockchainVerified ? '<div style="margin-top:12px;"><span class="badge badge-success">⛓ Blockchain Verified</span></div>' : ''}
+    </div>
+
+    ${c ? `
+    <div class="card" style="margin-bottom:20px;">
+      <div class="section-title">📄 Certificate Details</div>
+      <div class="detail-row"><div class="detail-key">Certificate ID</div><div class="detail-val"><span class="hash-text">${c.certificateId}</span></div></div>
+      <div class="detail-row"><div class="detail-key">Student Name</div><div class="detail-val"><strong>${c.studentName}</strong></div></div>
+      <div class="detail-row"><div class="detail-key">Course</div><div class="detail-val">${c.courseName}</div></div>
+      <div class="detail-row"><div class="detail-key">Institute</div><div class="detail-val">${c.instituteName}</div></div>
+      <div class="detail-row"><div class="detail-key">Issue Date</div><div class="detail-val">${formatDate(c.issueDate)}</div></div>
+      <div class="detail-row"><div class="detail-key">Grade</div><div class="detail-val"><span class="badge badge-info">${c.grade}</span></div></div>
+      <div class="detail-row"><div class="detail-key">Status</div><div class="detail-val">${c.isValid ? '<span class="badge badge-success">Active</span>' : '<span class="badge badge-danger">Revoked</span>'}</div></div>
+    </div>
+
+    <div class="card" style="margin-bottom:20px;">
+      <div class="section-title">⛓ Blockchain Details</div>
+      <div class="detail-row"><div class="detail-key">Data Hash (SHA-256)</div><div class="detail-val"><span class="hash-text">${c.hashValue}</span></div></div>
+      ${vr.blockHash ? `<div class="detail-row"><div class="detail-key">Block Hash</div><div class="detail-val"><span class="hash-text">${vr.blockHash}</span></div></div>` : ''}
+      <div class="detail-row"><div class="detail-key">Blockchain Status</div><div class="detail-val">${vr.blockchainVerified ? '<span class="badge badge-success">✓ Verified on chain</span>' : '<span class="badge badge-danger">✗ Not verified</span>'}</div></div>
+    </div>
+
+    ${c.qrCodeData ? `
+    <div class="card" style="margin-bottom:20px;display:flex;align-items:center;gap:24px;flex-wrap:wrap;">
+      <div>
+        <div class="section-title" style="margin-bottom:8px;">📱 QR Code</div>
+        <p style="color:var(--muted);font-size:.85rem;">Scan to share this verification link</p>
+      </div>
+      <img src="data:image/png;base64,${c.qrCodeData}" style="width:120px;height:120px;border-radius:10px;border:1px solid var(--border);"/>
+    </div>` : ''}
+
+    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:40px;">
+      <button class="btn btn-outline" onclick="copyToClipboard('${c.certificateId}')">📋 Copy Cert ID</button>
+      <button class="btn btn-outline" onclick="downloadCertificatePDF(${JSON.stringify(c).replace(/"/g,'&quot;')})">📄 Download PDF</button>
+      <a href="verify.html" class="btn btn-primary">🔍 Verify Another</a>
+    </div>
+    ` : `
+    <div style="display:flex;gap:12px;margin-bottom:40px;">
+      <a href="verify.html" class="btn btn-primary">🔍 Try Again</a>
+      <a href="../index.html" class="btn btn-outline">← Home</a>
+    </div>
+    `}
+  `;
+}
+
+load();
+</script>
+</body>
+</html>

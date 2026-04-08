@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Dashboard — BlockCert Admin</title>
+  <link rel="stylesheet" href="../css/style.css"/>
+</head>
+<body>
+<div class="bg-mesh"></div>
+
+<nav>
+  <a href="../index.html" class="nav-logo">
+    <div class="logo-icon">⛓</div> BlockCert
+  </a>
+  <div class="nav-links">
+    <a href="dashboard.html" class="active">Dashboard</a>
+    <a href="add-certificate.html">Issue Cert</a>
+    <a href="all-certificates.html">All Certs</a>
+    <a href="../pages/verify.html">Verify</a>
+    <button class="btn btn-outline btn-sm" onclick="logout()">Logout</button>
+  </div>
+</nav>
+
+<div class="page-header" style="padding:40px 40px 20px;">
+  <h1 style="font-size:1.8rem;">👋 Welcome back, <span id="adminName">Admin</span></h1>
+  <p style="color:var(--muted);">Here's an overview of the certificate system.</p>
+</div>
+
+<div class="main">
+  <!-- Stats -->
+  <div class="stats-grid" id="statsGrid">
+    <div class="card stat-card"><div class="stat-num" style="color:var(--blue)">—</div><div class="stat-label">Total Certificates</div></div>
+    <div class="card stat-card"><div class="stat-num" style="color:var(--green)">—</div><div class="stat-label">Active / Valid</div></div>
+    <div class="card stat-card"><div class="stat-num" style="color:var(--red)">—</div><div class="stat-label">Revoked</div></div>
+    <div class="card stat-card"><div class="stat-num" style="color:var(--cyan)">—</div><div class="stat-label">Total Verifications</div></div>
+    <div class="card stat-card"><div class="stat-num" style="color:var(--gold)">—</div><div class="stat-label">Successful Verifications</div></div>
+  </div>
+
+  <!-- Quick Actions -->
+  <div style="margin-top:32px;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;">
+    <a href="add-certificate.html" class="card card-hover" style="text-decoration:none;display:flex;align-items:center;gap:16px;">
+      <div style="font-size:2rem;">📜</div>
+      <div><div style="font-weight:700;margin-bottom:4px;">Issue Certificate</div><div style="color:var(--muted);font-size:.85rem;">Add a new certificate to the system</div></div>
+    </a>
+    <a href="all-certificates.html" class="card card-hover" style="text-decoration:none;display:flex;align-items:center;gap:16px;">
+      <div style="font-size:2rem;">📋</div>
+      <div><div style="font-weight:700;margin-bottom:4px;">View All Certs</div><div style="color:var(--muted);font-size:.85rem;">Browse, search, and manage certificates</div></div>
+    </a>
+    <a href="verify.html" class="card card-hover" style="text-decoration:none;display:flex;align-items:center;gap:16px;">
+      <div style="font-size:2rem;">🔍</div>
+      <div><div style="font-weight:700;margin-bottom:4px;">Verify Certificate</div><div style="color:var(--muted);font-size:.85rem;">Check if a certificate is genuine</div></div>
+    </a>
+  </div>
+
+  <!-- Recent Certificates -->
+  <div style="margin-top:40px;">
+    <div class="section-title">📋 Recent Certificates</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Cert ID</th><th>Student</th><th>Course</th><th>Grade</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody id="recentTable"><tr><td colspan="6" style="text-align:center;padding:32px;color:var(--muted)"><div class="spinner" style="margin:0 auto"></div></td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script src="../js/api.js"></script>
+<script src="../js/utils.js"></script>
+<script>
+if (!requireAuth()) throw new Error('Not auth');
+
+// Show admin name
+const adminData = JSON.parse(localStorage.getItem('admin_user') || '{}');
+document.getElementById('adminName').textContent = adminData.fullName || adminData.username || 'Admin';
+
+async function loadDashboard() {
+  // Load stats
+  try {
+    const { data: statsRes } = await CertAPI.stats();
+    if (statsRes.success) {
+      const s = statsRes.data;
+      const nums = document.querySelectorAll('.stat-num');
+      nums[0].textContent = s.total ?? 0;
+      nums[1].textContent = s.valid ?? 0;
+      nums[2].textContent = s.revoked ?? 0;
+      nums[3].textContent = s.verifications ?? 0;
+      nums[4].textContent = s.successfulVerifications ?? 0;
+    }
+  } catch(e) { console.error('Stats error', e); }
+
+  // Load recent certs
+  try {
+    const { data: certsRes } = await CertAPI.getAll();
+    const tbody = document.getElementById('recentTable');
+    if (!certsRes.success || !certsRes.data.length) {
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--muted)">No certificates yet. <a href="add-certificate.html" style="color:var(--blue)">Issue the first one →</a></td></tr>';
+      return;
+    }
+    const recent = certsRes.data.slice(-10).reverse();
+    tbody.innerHTML = recent.map(c => `
+      <tr>
+        <td><span class="hash-text" style="cursor:pointer" onclick="copyToClipboard('${c.certificateId}')">${c.certificateId}</span></td>
+        <td><strong>${c.studentName}</strong></td>
+        <td style="color:var(--muted)">${c.courseName}</td>
+        <td><span class="badge badge-info">${c.grade}</span></td>
+        <td>${c.isValid ? '<span class="badge badge-success">✓ Valid</span>' : '<span class="badge badge-danger">✗ Revoked</span>'}</td>
+        <td>
+          <a href="result.html?id=${c.certificateId}" class="btn btn-outline btn-sm">View</a>
+        </td>
+      </tr>
+    `).join('');
+  } catch(e) {
+    document.getElementById('recentTable').innerHTML = '<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--red)">Failed to load. Is the backend running?</td></tr>';
+  }
+}
+
+loadDashboard();
+</script>
+</body>
+</html>

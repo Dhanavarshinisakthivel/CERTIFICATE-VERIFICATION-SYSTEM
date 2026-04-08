@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>All Certificates — BlockCert Admin</title>
+  <link rel="stylesheet" href="../css/style.css"/>
+</head>
+<body>
+<div class="bg-mesh"></div>
+<nav>
+  <a href="../index.html" class="nav-logo"><div class="logo-icon">⛓</div> BlockCert</a>
+  <div class="nav-links">
+    <a href="dashboard.html">Dashboard</a>
+    <a href="add-certificate.html">Issue Cert</a>
+    <a href="all-certificates.html" class="active">All Certs</a>
+    <a href="verify.html">Verify</a>
+    <button class="btn btn-outline btn-sm" onclick="logout()">Logout</button>
+  </div>
+</nav>
+
+<div class="page-header">
+  <h1>📋 All Certificates</h1>
+  <p>Manage and browse all issued certificates.</p>
+</div>
+
+<div class="main">
+  <!-- Search & Filter bar -->
+  <div class="card" style="padding:20px;margin-bottom:24px;display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
+    <div class="form-group" style="flex:1;min-width:200px;margin:0;">
+      <label class="form-label">Search by Student Name</label>
+      <input id="searchInput" type="text" class="form-control" placeholder="Type to search..." oninput="onSearch(this.value)"/>
+    </div>
+    <div class="form-group" style="min-width:160px;margin:0;">
+      <label class="form-label">Filter by Status</label>
+      <select id="filterStatus" class="form-control" onchange="applyFilter()">
+        <option value="all">All</option>
+        <option value="valid">Valid</option>
+        <option value="revoked">Revoked</option>
+      </select>
+    </div>
+    <button class="btn btn-outline btn-sm" onclick="loadCertificates()">🔄 Refresh</button>
+    <a href="add-certificate.html" class="btn btn-primary btn-sm">+ Issue New</a>
+  </div>
+
+  <div id="countBar" style="margin-bottom:14px;color:var(--muted);font-size:.9rem;"></div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Certificate ID</th>
+          <th>Student Name</th>
+          <th>Course</th>
+          <th>Institute</th>
+          <th>Issue Date</th>
+          <th>Grade</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="certTable">
+        <tr><td colspan="8" style="text-align:center;padding:32px;"><div class="spinner" style="margin:0 auto"></div></td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Revoke Confirm Modal -->
+<div class="modal-overlay" id="revokeModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" style="color:var(--red)">⚠️ Revoke Certificate</div>
+      <button class="modal-close" onclick="closeModal()">×</button>
+    </div>
+    <p style="color:var(--muted);margin-bottom:20px;">Are you sure you want to revoke certificate <strong id="revokeId"></strong>? This will mark it as invalid for verification.</p>
+    <div style="display:flex;gap:12px;">
+      <button id="confirmRevokeBtn" class="btn btn-danger" onclick="confirmRevoke()">Yes, Revoke</button>
+      <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script src="../js/api.js"></script>
+<script src="../js/utils.js"></script>
+<script>
+if (!requireAuth()) throw new Error();
+let allCerts = [];
+let revokeTarget = null;
+
+async function loadCertificates() {
+  const tbody = document.getElementById('certTable');
+  tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:32px;"><div class="spinner" style="margin:0 auto"></div></td></tr>';
+  try {
+    const { data } = await CertAPI.getAll();
+    allCerts = data.success ? data.data : [];
+    renderTable(allCerts);
+  } catch(e) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--red)">Failed to load. Is the backend running?</td></tr>';
+  }
+}
+
+function renderTable(certs) {
+  const tbody = document.getElementById('certTable');
+  document.getElementById('countBar').textContent = `Showing ${certs.length} certificate${certs.length !== 1 ? 's' : ''}`;
+  if (!certs.length) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--muted)">No certificates found.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = certs.map(c => `
+    <tr>
+      <td><span class="hash-text" style="cursor:pointer;font-size:.78rem;" title="Click to copy" onclick="copyToClipboard('${c.certificateId}')">${c.certificateId}</span></td>
+      <td><strong>${c.studentName}</strong></td>
+      <td style="color:var(--muted);font-size:.88rem;">${c.courseName}</td>
+      <td style="color:var(--muted);font-size:.85rem;">${c.instituteName}</td>
+      <td style="font-size:.88rem;">${formatDate(c.issueDate)}</td>
+      <td><span class="badge badge-info">${c.grade}</span></td>
+      <td>${c.isValid ? '<span class="badge badge-success">✓ Valid</span>' : '<span class="badge badge-danger">✗ Revoked</span>'}</td>
+      <td style="display:flex;gap:6px;flex-wrap:wrap;">
+        <a href="result.html?id=${c.certificateId}" class="btn btn-outline btn-sm">👁</a>
+        ${c.isValid ? `<button class="btn btn-danger btn-sm" onclick="openRevoke('${c.certificateId}')">Revoke</button>` : ''}
+      </td>
+    </tr>
+  `).join('');
+}
+
+let searchTimer;
+function onSearch(val) {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(async () => {
+    if (val.length > 1) {
+      const { data } = await CertAPI.search(val);
+      applyFilterTo(data.success ? data.data : []);
+    } else {
+      applyFilterTo(allCerts);
+    }
+  }, 300);
+}
+
+function applyFilter() { applyFilterTo(allCerts); }
+
+function applyFilterTo(certs) {
+  const status = document.getElementById('filterStatus').value;
+  if (status === 'valid')   certs = certs.filter(c => c.isValid);
+  if (status === 'revoked') certs = certs.filter(c => !c.isValid);
+  renderTable(certs);
+}
+
+function openRevoke(id) {
+  revokeTarget = id;
+  document.getElementById('revokeId').textContent = id;
+  document.getElementById('revokeModal').classList.add('active');
+}
+function closeModal() { document.getElementById('revokeModal').classList.remove('active'); revokeTarget = null; }
+
+async function confirmRevoke() {
+  if (!revokeTarget) return;
+  const btn = document.getElementById('confirmRevokeBtn');
+  setLoading(btn, true, 'Yes, Revoke');
+  try {
+    const { data } = await CertAPI.revoke(revokeTarget);
+    if (data.success) {
+      showToast('Certificate revoked.', 'success');
+      closeModal();
+      await loadCertificates();
+    } else {
+      showToast(data.message || 'Failed to revoke.', 'error');
+    }
+  } catch(e) {
+    showToast('Server error.', 'error');
+  }
+  setLoading(btn, false, 'Yes, Revoke');
+}
+
+loadCertificates();
+</script>
+</body>
+</html>
