@@ -1,4 +1,5 @@
 package com.certverify.security;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -13,13 +14,9 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
 import java.util.Arrays;
 
-/**
- * SecurityConfig - configures which APIs are public vs protected.
- * Public: login, verify certificate (anyone can check)
- * Protected: add/view certificates (only logged-in admins)
- */
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
@@ -31,13 +28,17 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-            .csrf(csrf -> csrf.disable()) // Disabled for REST APIs
-            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .csrf(csrf -> csrf.disable())
+            .sessionManagement(session ->
+                session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+            )
             .authorizeHttpRequests(auth -> auth
-                // Public endpoints - no login needed
+                // Public endpoints
+                .requestMatchers("/", "/error").permitAll()
                 .requestMatchers("/api/auth/login").permitAll()
                 .requestMatchers("/api/certificates/verify/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/certificates/public/**").permitAll()
+
                 // Admin-only endpoints
                 .anyRequest().authenticated()
             )
@@ -48,19 +49,25 @@ public class SecurityConfig {
 
     @Bean
     public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder(); // Secure password hashing
+        return new BCryptPasswordEncoder();
     }
 
-    /** Allow requests from frontend (localhost:3000, netlify, etc.) */
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
+
         config.setAllowedOriginPatterns(Arrays.asList("*"));
-        config.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        config.setAllowedMethods(
+            Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS")
+        );
         config.setAllowedHeaders(Arrays.asList("*"));
         config.setAllowCredentials(false);
-        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+
+        UrlBasedCorsConfigurationSource source =
+            new UrlBasedCorsConfigurationSource();
+
         source.registerCorsConfiguration("/**", config);
+
         return source;
     }
 }
