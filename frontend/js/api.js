@@ -3,14 +3,12 @@
 // Change API_BASE to your deployed backend URL
 // ================================================
 
-const API_BASE = 'http://localhost:8080/api';
+const API_BASE = 'https://certverify-backend-i7zm.onrender.com/api';
 
-// Get JWT token from localStorage (set after login)
 function getToken() {
   return localStorage.getItem('admin_token');
 }
 
-// Standard fetch with auth header
 async function apiFetch(endpoint, options = {}) {
   const token = getToken();
   const headers = {
@@ -23,7 +21,6 @@ async function apiFetch(endpoint, options = {}) {
   return { status: response.status, data };
 }
 
-// ── Auth ──
 const AuthAPI = {
   login: (username, password) =>
     apiFetch('/auth/login', {
@@ -32,7 +29,6 @@ const AuthAPI = {
     })
 };
 
-// ── Certificates ──
 const CertAPI = {
   issue:      (payload) => apiFetch('/certificates/issue', { method: 'POST', body: JSON.stringify(payload) }),
   getAll:     ()        => apiFetch('/certificates'),
@@ -43,7 +39,6 @@ const CertAPI = {
   stats:      ()        => apiFetch('/certificates/stats'),
 };
 
-// ── Auth helpers ──
 function isLoggedIn() {
   return !!getToken();
 }
