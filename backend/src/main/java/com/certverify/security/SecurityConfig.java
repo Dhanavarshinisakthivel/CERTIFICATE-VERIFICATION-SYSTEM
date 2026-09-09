@@ -26,22 +26,28 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+
         http
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+
             .csrf(csrf -> csrf.disable())
+
             .sessionManagement(session ->
                 session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
             )
+
             .authorizeHttpRequests(auth -> auth
+
                 // Public endpoints
                 .requestMatchers("/", "/error").permitAll()
                 .requestMatchers("/api/auth/login").permitAll()
                 .requestMatchers("/api/certificates/verify/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/certificates/public/**").permitAll()
 
-                // Admin-only endpoints
+                // All other endpoints require authentication
                 .anyRequest().authenticated()
             )
+
             .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
@@ -54,13 +60,21 @@ public class SecurityConfig {
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
+
         CorsConfiguration config = new CorsConfiguration();
 
         config.setAllowedOriginPatterns(Arrays.asList("*"));
-        config.setAllowedMethods(
-            Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS")
-        );
+
+        config.setAllowedMethods(Arrays.asList(
+            "GET",
+            "POST",
+            "PUT",
+            "DELETE",
+            "OPTIONS"
+        ));
+
         config.setAllowedHeaders(Arrays.asList("*"));
+
         config.setAllowCredentials(false);
 
         UrlBasedCorsConfigurationSource source =
